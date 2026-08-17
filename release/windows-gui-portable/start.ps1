@@ -2,8 +2,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 $root = $PSScriptRoot
-$application = Join-Path $root 'sing-box.exe'
-$daemon = Join-Path $root 'resources\daemon\sing-box-daemon.exe'
+$applicationDirectory = Join-Path $root 'app'
+$application = Join-Path $applicationDirectory 'sing-box.exe'
+$daemon = Join-Path $applicationDirectory 'resources\daemon\sing-box-daemon.exe'
 $dataRoot = Join-Path $root 'data'
 $userData = Join-Path $dataRoot 'SFW'
 $daemonData = Join-Path $dataRoot 'daemon'
@@ -110,7 +111,7 @@ try {
         throw "The portable daemon did not become ready. See $daemonError"
     }
 
-    $applicationProcess = Start-Process -FilePath $application -WorkingDirectory $root -PassThru
+    $applicationProcess = Start-Process -FilePath $application -WorkingDirectory $applicationDirectory -PassThru
     $applicationProcess.WaitForExit()
 } finally {
     if ($null -ne $applicationProcess -and -not $applicationProcess.HasExited) {
