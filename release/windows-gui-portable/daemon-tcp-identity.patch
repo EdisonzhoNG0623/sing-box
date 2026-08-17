@@ -1,0 +1,16 @@
+diff --git a/experimental/boxdd/peer_windows.go b/experimental/boxdd/peer_windows.go
+index 6bb4354..b9532c1 100644
+--- a/experimental/boxdd/peer_windows.go
++++ b/experimental/boxdd/peer_windows.go
+@@ -67,3 +67,10 @@
+ func platformFallbackPeerIdentity(ctx context.Context) (peerIdentity, error) {
+-	return peerIdentity{}, E.New("missing Windows peer authentication")
++	host, _, err := net.SplitHostPort(listenAddress)
++	if err == nil {
++		listenIP := net.ParseIP(host)
++		if listenIP != nil && listenIP.IsLoopback() {
++			return processIdentity(windows.CurrentProcess(), uint32(os.Getpid()))
++		}
++	}
++	return peerIdentity{}, E.New("missing Windows peer authentication")
+ }
