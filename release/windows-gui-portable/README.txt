@@ -10,9 +10,14 @@ sing-box SFW 1.14.0-beta.15 Windows x64 便携免管理员版
 使用方法
 --------
 1. 把整个文件夹解压到当前用户可写的目录，例如桌面或 D:\Tools。
-2. 双击 start.cmd；不要直接双击 sing-box.exe。
+2. 双击 sing-box-portable.exe。
 3. 在官方 SFW 图形界面内导入你自己的配置。
 4. 使用 mixed 入站和“系统代理”模式。
+
+故障排查
+--------
+- start.cmd 是备用入口，作用与 sing-box-portable.exe 相同。
+- app\sing-box.exe 是内部官方 GUI，不能脱离便携启动器单独运行。
 
 免管理员范围
 ------------

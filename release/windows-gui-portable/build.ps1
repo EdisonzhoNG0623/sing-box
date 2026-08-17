@@ -106,6 +106,14 @@ try {
     & node.exe (Join-Path $PSScriptRoot 'patch-app.cjs') patch-integrity $application $originalAsar $asar
     if ($LASTEXITCODE -ne 0) { throw "Failed to patch the embedded ASAR integrity hash (exit $LASTEXITCODE)." }
 
+    $launcher = Join-Path $temporaryRoot 'sing-box-portable.exe'
+    $csharpCompiler = Get-ChildItem -LiteralPath (Join-Path $env:WINDIR 'Microsoft.NET\Framework64') -Recurse -Filter csc.exe -ErrorAction Stop |
+        Sort-Object FullName -Descending |
+        Select-Object -First 1 -ExpandProperty FullName
+    if (-not $csharpCompiler) { throw 'The .NET Framework x64 C# compiler was not found.' }
+    & $csharpCompiler /nologo /target:winexe ("/out:" + $launcher) (Join-Path $PSScriptRoot 'launcher.cs')
+    if ($LASTEXITCODE -ne 0) { throw "Failed to compile the portable launcher (exit $LASTEXITCODE)." }
+
     $certificate = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=SFW Portable No-Admin Build' -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256 -KeyAlgorithm RSA -KeyLength 3072 -NotAfter (Get-Date).AddYears(20)
     $pfxPath = Join-Path $temporaryRoot 'signing.pfx'
     $pfxPasswordText = [Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
@@ -116,7 +124,7 @@ try {
         Sort-Object FullName -Descending |
         Select-Object -First 1 -ExpandProperty FullName
     if (-not $signTool) { throw 'Windows SDK x64 signtool.exe was not found.' }
-    & $signTool sign /fd SHA256 /f $pfxPath /p $pfxPasswordText $application $daemon
+    & $signTool sign /fd SHA256 /f $pfxPath /p $pfxPasswordText $application $daemon $launcher
     if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed (exit $LASTEXITCODE)." }
 
     $appSignature = Get-AuthenticodeSignature -FilePath $application
@@ -127,10 +135,15 @@ try {
     }
 
     Remove-Item -LiteralPath (Join-Path $extracted 'resources\elevate.exe') -Force -ErrorAction SilentlyContinue
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start.ps1') -Destination $extracted
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start.cmd') -Destination $extracted
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.txt') -Destination $extracted
-    Copy-Item -LiteralPath (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'LICENSE') -Destination (Join-Path $extracted 'LICENSE-sing-box.txt')
+    $portableRoot = Join-Path $temporaryRoot 'portable-root'
+    $portableApplication = Join-Path $portableRoot 'app'
+    [IO.Directory]::CreateDirectory($portableRoot) | Out-Null
+    [IO.Directory]::Move($extracted, $portableApplication)
+    Copy-Item -LiteralPath $launcher -Destination $portableRoot
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start.ps1') -Destination $portableRoot
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start.cmd') -Destination $portableRoot
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.txt') -Destination $portableRoot
+    Copy-Item -LiteralPath (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'LICENSE') -Destination (Join-Path $portableRoot 'LICENSE-sing-box.txt')
 
     $sourceText = @"
 UNOFFICIAL DERIVATIVE PORTABLE BUILD
@@ -143,12 +156,14 @@ Version:          v$version
 Asset:            $installerUrl
 Original SHA-256: $installerSha256
 Core revision:    $coreSourceRevision
-Desktop source:   https://github.com/SagerNet/sing-box-for-desktop/tree/$desktopSourceRevision
+Desktop source:   https://github.com/SagerNet/sing-box-for-windows-desktop/tree/$desktopSourceRevision
 Core source:      https://github.com/SagerNet/sing-box/tree/$coreSourceRevision
 
 Portable patch
 --------------
 - Extracted the official SFW Electron application from its installer.
+- Moved the original Electron runtime under app and added one obvious root-level
+  sing-box-portable.exe launcher, so the service-install UI is not an entry point.
 - Redirected the packaged Windows desktop gRPC transport to an official
   sing-box-daemon.exe TCP loopback endpoint selected by start.ps1.
 - Rebuilt sing-box-daemon.exe from the exact beta.15 source revision with one
@@ -161,8 +176,8 @@ Portable patch
 - Removed resources\elevate.exe because this package never installs or repairs
   a Windows service.
 - Updated Electron's embedded app.asar integrity hash after the patch.
-- Re-signed sing-box.exe and sing-box-daemon.exe with one build-local self-signed
-  code-signing certificate to satisfy SFW worker authentication.
+- Re-signed app\sing-box.exe, sing-box-daemon.exe, and the portable launcher with
+  one build-local self-signed code-signing certificate to satisfy worker authentication.
 - Added start scripts, documentation, source attribution, and licenses.
 - Added no configuration, subscription, node, key, credential, or settings database.
 
@@ -173,9 +188,9 @@ Thumbprint:      $($appSignature.SignerCertificate.Thumbprint)
 Valid until:     $($appSignature.SignerCertificate.NotAfter.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
 This is NOT the official Project S signing certificate.
 "@
-    [IO.File]::WriteAllText((Join-Path $extracted 'SOURCE.txt'), $sourceText, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $portableRoot 'SOURCE.txt'), $sourceText, [Text.UTF8Encoding]::new($false))
 
-    [IO.Directory]::Move($extracted, $destination)
+    [IO.Directory]::Move($portableRoot, $destination)
     Compress-Archive -LiteralPath $destination -DestinationPath $outputZip -CompressionLevel Optimal
     $zipHash = (Get-FileHash -LiteralPath $outputZip -Algorithm SHA256).Hash
     Write-Host "Created: $outputZip"
