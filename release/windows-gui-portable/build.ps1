@@ -8,16 +8,16 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$version = '1.14.0-beta.15'
+$version = '1.14.0-rc.1'
 $installerName = "SFW-$version-x64.exe"
 $installerUrl = "https://github.com/SagerNet/sing-box/releases/download/v$version/$installerName"
-$installerSha256 = '7AE213D40727CA09DE095855CAA026577FA185B189D8C241827DB7140155EB02'
+$installerSha256 = 'DEF33C198D8FEF0C44CFE236615568518029F0669EB6977A9339DC8E5C564E51'
 $desktopSourceRevision = 'cebee0d527c4e5d5500f971553628e0dfa8bae0f'
-$coreSourceRevision = 'e98ae31a7d9a558d1b2dd982c9f1f9c4b8bbff87'
-$goVersion = '1.25.5'
+$coreSourceRevision = '8dd67a1e49711ce8a9a884bef60a2139ef36446f'
+$goVersion = '1.26.6'
 $goArchiveName = "go$goVersion.windows-amd64.zip"
 $goArchiveUrl = "https://go.dev/dl/$goArchiveName"
-$goArchiveSha256 = 'AE756CCE1CB80C819B4FE01B0353807178F532211B47F72D7FA77949DE054EBB'
+$goArchiveSha256 = '5B6C5B556525810463B5C897B50DC7A82D6A3DC0BFAF55D990A7E9F31D6B2318'
 $portableName = "SFW-$version-windows-x64-portable-noadmin"
 $outputParent = [IO.Path]::GetFullPath($OutputDirectory)
 $destination = Join-Path $outputParent $portableName
@@ -46,10 +46,20 @@ try {
         throw "Official installer SHA-256 mismatch. Expected $installerSha256, got $actualInstallerHash."
     }
 
-    $extracted = Join-Path $temporaryRoot 'extracted'
-    [IO.Directory]::CreateDirectory($extracted) | Out-Null
-    & tar.exe -xf $installerPath -C $extracted
+    $installerExtracted = Join-Path $temporaryRoot 'installer-extracted'
+    [IO.Directory]::CreateDirectory($installerExtracted) | Out-Null
+    & tar.exe -xf $installerPath -C $installerExtracted
     if ($LASTEXITCODE -ne 0) { throw "Failed to extract the official NSIS/7z SFX (exit $LASTEXITCODE)." }
+
+    $nestedApplication = Join-Path $installerExtracted '$PLUGINSDIR\app-64.7z'
+    if (Test-Path -LiteralPath $nestedApplication) {
+        $extracted = Join-Path $temporaryRoot 'extracted'
+        [IO.Directory]::CreateDirectory($extracted) | Out-Null
+        & tar.exe -xf $nestedApplication -C $extracted
+        if ($LASTEXITCODE -ne 0) { throw "Failed to extract the official application payload (exit $LASTEXITCODE)." }
+    } else {
+        $extracted = $installerExtracted
+    }
 
     $application = Join-Path $extracted 'sing-box.exe'
     $daemon = Join-Path $extracted 'resources\daemon\sing-box-daemon.exe'
@@ -75,7 +85,7 @@ try {
 
     $sourceWorktree = Join-Path $temporaryRoot 'sing-box-source'
     & git.exe worktree add --detach $sourceWorktree $coreSourceRevision
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create the beta.15 source worktree (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create the rc.1 source worktree (exit $LASTEXITCODE)." }
     $sourceWorktreeCreated = $true
     & git.exe -C $sourceWorktree apply (Join-Path $PSScriptRoot 'daemon-tcp-identity.patch')
     if ($LASTEXITCODE -ne 0) { throw "Failed to apply the Windows TCP identity patch (exit $LASTEXITCODE)." }
@@ -86,7 +96,7 @@ try {
         $env:PATH = (Join-Path $goRoot 'go\bin') + ';' + $previousPath
         $env:GOTOOLCHAIN = 'local'
         & $goExecutable run ./cmd/internal/build_boxdd '-target=windows/amd64' ("-output=" + $daemon)
-        if ($LASTEXITCODE -ne 0) { throw "Failed to build the patched beta.15 daemon (exit $LASTEXITCODE)." }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to build the patched rc.1 daemon (exit $LASTEXITCODE)." }
     } finally {
         Pop-Location
         $env:PATH = $previousPath
@@ -156,7 +166,7 @@ Version:          v$version
 Asset:            $installerUrl
 Original SHA-256: $installerSha256
 Core revision:    $coreSourceRevision
-Desktop source:   https://github.com/SagerNet/sing-box-for-windows-desktop/tree/$desktopSourceRevision
+Desktop source:   https://github.com/SagerNet/sing-box-for-desktop/tree/$desktopSourceRevision
 Core source:      https://github.com/SagerNet/sing-box/tree/$coreSourceRevision
 
 Portable patch
@@ -166,7 +176,7 @@ Portable patch
   sing-box-portable.exe launcher, so the service-install UI is not an entry point.
 - Redirected the packaged Windows desktop gRPC transport to an official
   sing-box-daemon.exe TCP loopback endpoint selected by start.ps1.
-- Rebuilt sing-box-daemon.exe from the exact beta.15 source revision with one
+- Rebuilt sing-box-daemon.exe from the exact rc.1 source revision with one
   Windows-only patch: TCP development mode inherits the current user only when
   its configured listen IP is loopback. The launcher binds to 127.0.0.1 and the
   fallback remains disabled for every non-loopback listen address.
