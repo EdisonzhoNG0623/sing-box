@@ -8,16 +8,16 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$version = '1.14.0-rc.1'
+$version = '1.14.0'
 $installerName = "SFW-$version-x64.exe"
 $installerUrl = "https://github.com/SagerNet/sing-box/releases/download/v$version/$installerName"
-$installerSha256 = 'DEF33C198D8FEF0C44CFE236615568518029F0669EB6977A9339DC8E5C564E51'
-$desktopSourceRevision = 'cebee0d527c4e5d5500f971553628e0dfa8bae0f'
-$coreSourceRevision = '8dd67a1e49711ce8a9a884bef60a2139ef36446f'
-$goVersion = '1.26.6'
+$installerSha256 = '633D67C5D0009BB8A256C1C84FA7A9B3F5ADAA1A2CC982842EE9CA905ACC126E'
+$desktopSourceRevision = '92b69e160d30249e8fc21a1106df6af538f0fb92'
+$coreSourceRevision = '0b8995879f29a9b98ee027bc17b75e101445b238'
+$goVersion = '1.26.7'
 $goArchiveName = "go$goVersion.windows-amd64.zip"
 $goArchiveUrl = "https://go.dev/dl/$goArchiveName"
-$goArchiveSha256 = '5B6C5B556525810463B5C897B50DC7A82D6A3DC0BFAF55D990A7E9F31D6B2318'
+$goArchiveSha256 = 'F4F534A486E4BC3387FA18F08208F2F854B7AAEA8A08F2A2D829A914A05ABB11'
 $portableName = "SFW-$version-windows-x64-portable-noadmin"
 $outputParent = [IO.Path]::GetFullPath($OutputDirectory)
 $destination = Join-Path $outputParent $portableName
@@ -85,7 +85,7 @@ try {
 
     $sourceWorktree = Join-Path $temporaryRoot 'sing-box-source'
     & git.exe worktree add --detach $sourceWorktree $coreSourceRevision
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create the rc.1 source worktree (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create the 1.14.0 source worktree (exit $LASTEXITCODE)." }
     $sourceWorktreeCreated = $true
     & git.exe -C $sourceWorktree apply (Join-Path $PSScriptRoot 'daemon-tcp-identity.patch')
     if ($LASTEXITCODE -ne 0) { throw "Failed to apply the Windows TCP identity patch (exit $LASTEXITCODE)." }
@@ -96,7 +96,7 @@ try {
         $env:PATH = (Join-Path $goRoot 'go\bin') + ';' + $previousPath
         $env:GOTOOLCHAIN = 'local'
         & $goExecutable run ./cmd/internal/build_boxdd '-target=windows/amd64' ("-output=" + $daemon)
-        if ($LASTEXITCODE -ne 0) { throw "Failed to build the patched rc.1 daemon (exit $LASTEXITCODE)." }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to build the patched 1.14.0 daemon (exit $LASTEXITCODE)." }
     } finally {
         Pop-Location
         $env:PATH = $previousPath
@@ -176,7 +176,7 @@ Portable patch
   sing-box-portable.exe launcher, so the service-install UI is not an entry point.
 - Redirected the packaged Windows desktop gRPC transport to an official
   sing-box-daemon.exe TCP loopback endpoint selected by start.ps1.
-- Rebuilt sing-box-daemon.exe from the exact rc.1 source revision with one
+- Rebuilt sing-box-daemon.exe from the exact 1.14.0 source revision with one
   Windows-only patch: TCP development mode inherits the current user only when
   its configured listen IP is loopback. The launcher binds to 127.0.0.1 and the
   fallback remains disabled for every non-loopback listen address.
